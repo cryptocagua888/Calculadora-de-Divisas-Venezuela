@@ -2,11 +2,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MarketData } from "../types";
 
 /**
- * Fuente 1: DolarVzla (API tradicional)
+ * Fuente 1: DolarVzla (API)
  */
 const fetchDolarVzla = async () => {
   try {
-    console.log("Intentando DolarVzla...");
     const response = await fetch("https://api.dolarvzla.com/public/exchange-rate", {
       headers: { 'Accept': 'application/json' }
     });
@@ -15,19 +14,16 @@ const fetchDolarVzla = async () => {
     
     const usd = data.usd || data.bcv?.usd || data.dolar;
     const eur = data.eur || data.bcv?.eur || data.euro;
-    const fecha = data.updated_at || data.last_update || data.fecha;
 
     if (usd && eur) {
       return { 
         usd: parseFloat(usd), 
         eur: parseFloat(eur), 
-        fecha: fecha || new Date().toISOString(),
-        source: "DolarVzla (API)"
+        source: "DolarVzla API"
       };
     }
     return null;
   } catch (e) {
-    console.warn("DolarVzla falló:", e);
     return null;
   }
 };
@@ -37,7 +33,6 @@ const fetchDolarVzla = async () => {
  */
 const fetchDolarApiBackup = async () => {
   try {
-    console.log("Intentando DolarApi...");
     const [u, e] = await Promise.all([
       fetch("https://ve.dolarapi.com/v1/dolares/oficial"),
       fetch("https://ve.dolarapi.com/v1/euros/oficial")
@@ -48,40 +43,33 @@ const fetchDolarApiBackup = async () => {
     return { 
       usd: du.promedio, 
       eur: de.promedio, 
-      fecha: du.fechaActualizacion,
-      source: "DolarApi (Backup)"
+      source: "DolarApi"
     };
   } catch (e) {
-    console.warn("DolarApi falló:", e);
     return null;
   }
 };
 
 /**
- * Fuente 3: Google Search via Gemini (Definitiva si hay CORS o fallos de API)
+ * Fuente 3: Google Search via Gemini (Búsqueda de emergencia si las APIs fallan)
  */
 const fetchRatesViaAI = async () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("API_KEY no detectada en process.env. Asegúrate de configurarla en tu panel de control.");
-    return null;
-  }
+  if (!apiKey) return null;
 
   try {
-    console.log("Buscando tasas oficiales en Google Search...");
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: "Busca en la web la tasa oficial vigente del Banco Central de Venezuela (BCV) para el dólar y el euro de hoy. Responde estrictamente con el JSON solicitado.",
+      contents: "Busca la tasa oficial actual del BCV para el dólar y el euro en Venezuela hoy. Responde solo con el JSON solicitado.",
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            usd: { type: Type.NUMBER, description: "Tasa del dólar en Bs" },
-            eur: { type: Type.NUMBER, description: "Tasa del euro en Bs" },
-            fecha: { type: Type.STRING, description: "Fecha de la tasa" }
+            usd: { type: Type.NUMBER },
+            eur: { type: Type.NUMBER }
           },
           required: ["usd", "eur"]
         }
@@ -90,36 +78,34 @@ const fetchRatesViaAI = async () => {
     
     const data = JSON.parse(response.text || "{}");
     if (data.usd && data.eur) {
-      return { ...data, source: "Google Search (Dato Directo BCV)" };
+      return { ...data, source: "BCV (vía Google Search)" };
     }
     return null;
   } catch (e) {
-    console.error("Fallo búsqueda IA:", e);
     return null;
   }
 };
 
 /**
- * Obtiene la tasa USDT asegurando el formato "Bolívares por USDT"
+ * Obtiene la tasa USDT (Bolívares por cada 1 USDT)
  */
 const fetchUsdtFromYadio = async (): Promise<number | null> => {
   try {
-    // Intentamos obtener la tasa USD/VES de Yadio
     const response = await fetch("https://api.yadio.io/rate/USD/VES");
     if (!response.ok) return null;
     const json = await response.json();
     
     if (json.rate) {
       let rate = parseFloat(json.rate);
-      // Si el rate es muy bajo (ej. 0.018), es "USD por 1 VES". Invertimos para obtener "VES por 1 USD".
-      if (rate > 0 && rate < 1) {
+      // Si la tasa es < 1 (ej. 0.018), la API devolvió "USD por 1 VES". 
+      // Invertimos para obtener "VES por 1 USD" (ej. 55.40).
+      if (rate > 0 && rate < 1.0) {
         rate = 1 / rate;
       }
       return rate;
     }
     return null;
   } catch (error) {
-    console.warn("Error obteniendo USDT de Yadio:", error);
     return null;
   }
 };
@@ -129,16 +115,16 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
     usd_bcv: { price: 0, label: "Dólar BCV", symbol: "$", icon: "fa-building-columns", color: "blue" },
     eur_bcv: { price: 0, label: "Euro BCV", symbol: "€", icon: "fa-euro-sign", color: "indigo" },
     usdt: { price: 0, label: "USDT Binance", symbol: "₮", icon: "fa-circle-dollar-to-slot", color: "emerald" },
-    lastUpdate: "Sin datos",
+    lastUpdate: "Consultando...",
     sources: []
   };
 
   try {
-    // 1. Intentar APIs tradicionales primero (Rápidas)
+    // 1. Intentar APIs tradicionales
     let bcvData = await fetchDolarVzla();
     if (!bcvData) bcvData = await fetchDolarApiBackup();
 
-    // 2. Si las APIs fallan (CORS o Caídas), usar IA con Google Search (Más robusto)
+    // 2. Si fallan, intentar con búsqueda IA
     if (!bcvData) {
       bcvData = await fetchRatesViaAI();
     }
@@ -149,35 +135,34 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
       usd_bcv: { ...fallback.usd_bcv, price: bcvData?.usd || 0 },
       eur_bcv: { ...fallback.eur_bcv, price: bcvData?.eur || 0 },
       usdt: { ...fallback.usdt, price: usdtPrice || 0 },
-      lastUpdate: bcvData ? `Fuente: ${bcvData.source}` : "Error de sincronización (BCV Inaccesible)",
+      lastUpdate: bcvData ? `Fuente: ${bcvData.source}` : "Error de conexión con el BCV",
       sources: [
-        { title: bcvData?.source || "BCV Oficial", uri: "https://www.bcv.org.ve" },
-        { title: "Yadio API", uri: "https://yadio.io" }
+        { title: bcvData?.source || "BCV", uri: "https://www.bcv.org.ve" },
+        { title: "Yadio (USDT)", uri: "https://yadio.io" }
       ]
     };
   } catch (error) {
-    console.error("Error en servicio de divisas:", error);
     return fallback;
   }
 };
 
 export const askAssistant = async (query: string, data: MarketData): Promise<string> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) return "⚠️ Error: La API Key no está configurada en el entorno. Asegúrate de que el nombre sea 'API_KEY'.";
+  if (!apiKey) return "⚠️ Error: La variable API_KEY no está definida. Verifica la configuración de tu proyecto.";
   
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: query,
       config: {
-        systemInstruction: `Eres un experto financiero en el mercado venezolano. Datos actuales: Dólar BCV: ${data.usd_bcv.price}, Euro BCV: ${data.eur_bcv.price}, USDT Binance: ${data.usdt.price}. Responde de forma clara y útil para el usuario.`
+        tools: [{ googleSearch: {} }],
+        systemInstruction: `Eres un experto financiero en Venezuela. Datos actuales en Bs: Dólar BCV: ${data.usd_bcv.price}, Euro BCV: ${data.eur_bcv.price}, USDT: ${data.usdt.price}. Usa Google Search si el usuario pregunta por noticias recientes.`
       }
     });
-    return response.text || "No pude generar una respuesta en este momento.";
+    return response.text || "No tengo una respuesta clara en este momento.";
   } catch (e: any) {
-    console.error("Error IA:", e);
-    if (e.message?.includes("API_KEY_INVALID")) return "⚠️ La API Key configurada no es válida.";
-    return "Ocurrió un error al procesar tu consulta con la IA.";
+    console.error("Gemini Error:", e);
+    return "Lo siento, hubo un problema al conectar con mi inteligencia artificial.";
   }
 };
