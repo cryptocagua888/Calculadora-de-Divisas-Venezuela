@@ -26,48 +26,43 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
   useEffect(() => {
     const fromRate = getRate(fromCurrency);
     const toRate = getRate(toCurrency);
+    
+    // Cálculo de la conversión
     const calculated = (amount * fromRate) / toRate;
     setResult(calculated);
 
-    // LÓGICA DE DIFERENCIA SEGÚN ORIGEN Y DESTINO
+    // LÓGICA DE PORCENTAJE DINÁMICO SEGÚN "DESDE" Y "HACIA"
     let diff = 0;
     let label = "";
     let trend: 'up' | 'down' | 'neutral' = 'neutral';
 
-    // Caso 1: Conversión entre dos divisas (ej. USD -> USDT)
+    // 1. Si comparamos dos divisas directamente (Ej: USD -> USDT o EUR -> USD)
     if (fromCurrency !== 'VES' && toCurrency !== 'VES' && fromCurrency !== toCurrency) {
       diff = ((fromRate - toRate) / toRate) * 100;
       label = `vs ${toCurrency.split('_')[0]}`;
     } 
-    // Caso 2: De Divisa a Bolívares (Cálculo de Brecha de Mercado)
-    else if (fromCurrency !== 'VES' && toCurrency === 'VES') {
-      if (fromCurrency === 'USD_BCV') {
+    // 2. Si convertimos DESDE o HACIA Bolívares (VES)
+    else if (fromCurrency === 'VES' || toCurrency === 'VES') {
+      const activeDivisa = fromCurrency === 'VES' ? toCurrency : fromCurrency;
+      
+      if (activeDivisa === 'USD_BCV') {
+        // Comparación clásica de brecha BCV vs Paralelo
         diff = ((data.usd_bcv.price - data.usdt.price) / data.usdt.price) * 100;
-        label = "vs Paralelo (USDT)";
-      } else if (fromCurrency === 'USDT') {
+        label = "Brecha vs Paralelo";
+      } else if (activeDivisa === 'USDT') {
+        // Comparación inversa: Paralelo vs BCV
         diff = ((data.usdt.price - data.usd_bcv.price) / data.usd_bcv.price) * 100;
-        label = "vs Oficial (BCV)";
-      } else if (fromCurrency === 'EUR_BCV') {
+        label = "Brecha vs Oficial";
+      } else if (activeDivisa === 'EUR_BCV') {
+        // Euro comparado con el Dólar BCV
         diff = ((data.eur_bcv.price - data.usd_bcv.price) / data.usd_bcv.price) * 100;
-        label = "vs USD BCV";
-      }
-    }
-    // Caso 3: De Bolívares a Divisa (Cálculo de costo de adquisición)
-    else if (fromCurrency === 'VES' && toCurrency !== 'VES') {
-      if (toCurrency === 'USD_BCV') {
-        diff = ((data.usd_bcv.price - data.usdt.price) / data.usdt.price) * 100;
-        label = "vs Brecha Paralela";
-      } else if (toCurrency === 'USDT') {
-        diff = ((data.usdt.price - data.usd_bcv.price) / data.usd_bcv.price) * 100;
-        label = "vs Tasa Oficial";
-      } else {
-        diff = ((getRate(toCurrency) - data.usd_bcv.price) / data.usd_bcv.price) * 100;
-        label = "vs USD Base";
+        label = "vs Dólar Oficial";
       }
     }
 
-    if (diff > 0) trend = 'up';
-    else if (diff < 0) trend = 'down';
+    if (diff > 0.01) trend = 'up';
+    else if (diff < -0.01) trend = 'down';
+    else trend = 'neutral';
 
     setComparison({ label, diff, trend });
   }, [amount, fromCurrency, toCurrency, data]);
@@ -92,13 +87,8 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-xl font-extrabold text-slate-800 flex items-center">
           <span className="w-1.5 h-7 bg-indigo-600 rounded-full mr-3"></span>
-          Calculadora de Brecha
+          Conversión y Brecha
         </h2>
-        <div className="flex gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-indigo-100"></span>
-          <span className="w-2 h-2 rounded-full bg-indigo-200"></span>
-          <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-        </div>
       </div>
 
       <div className="space-y-7">
@@ -130,14 +120,14 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
               <option value="VES">🇻🇪 VES (Bolívares)</option>
               <option value="USD_BCV">🇺🇸 USD (Dólar)</option>
               <option value="EUR_BCV">🇪🇺 EUR (Euro)</option>
-              <option value="USDT">🪙 USDT (Binance)</option>
+              <option value="USDT">🪙 USDT (Paralelo)</option>
             </select>
             <i className="fas fa-chevron-down absolute right-5 bottom-6 text-slate-300 pointer-events-none text-[10px]"></i>
           </div>
 
           <button
             onClick={swapCurrencies}
-            className="md:mt-6 w-14 h-14 self-center mx-auto flex items-center justify-center rounded-2xl bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-xl hover:shadow-indigo-200 transition-all active:scale-90"
+            className="md:mt-6 w-14 h-14 self-center mx-auto flex items-center justify-center rounded-2xl bg-slate-900 text-white hover:bg-indigo-600 transition-all active:scale-90"
           >
             <i className="fas fa-exchange-alt rotate-90 md:rotate-0 text-lg"></i>
           </button>
@@ -152,22 +142,19 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
               <option value="VES">🇻🇪 VES (Bolívares)</option>
               <option value="USD_BCV">🇺🇸 USD (Dólar)</option>
               <option value="EUR_BCV">🇪🇺 EUR (Euro)</option>
-              <option value="USDT">🪙 USDT (Binance)</option>
+              <option value="USDT">🪙 USDT (Paralelo)</option>
             </select>
             <i className="fas fa-chevron-down absolute right-5 bottom-6 text-slate-300 pointer-events-none text-[10px]"></i>
           </div>
         </div>
 
         <div className="pt-6">
-          <div className="relative bg-gradient-to-br from-slate-900 to-indigo-950 rounded-[2.5rem] p-8 md:p-10 text-white shadow-3xl shadow-slate-200 overflow-hidden group">
-            <div className="absolute -right-20 -top-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
-            
+          <div className="relative bg-slate-900 rounded-[2.5rem] p-8 md:p-10 text-white shadow-2xl overflow-hidden group">
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-6">
-                <p className="text-indigo-200/50 text-[10px] font-black uppercase tracking-[0.3em]">Monto Calculado</p>
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">Total Estimado</p>
                 {comparison && comparison.label && (
-                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black border backdrop-blur-xl transition-all duration-500 ${comparison.trend === 'up' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : comparison.trend === 'down' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-slate-500/10 border-slate-500/20 text-slate-400'}`}>
-                    <i className={`fas fa-caret-${comparison.trend === 'up' ? 'up' : 'down'} ${comparison.trend === 'neutral' ? 'hidden' : ''}`}></i>
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black border backdrop-blur-xl ${comparison.trend === 'up' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
                     {Math.abs(comparison.diff).toFixed(2)}% {comparison.label}
                   </div>
                 )}
@@ -177,18 +164,15 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
                 <h3 className="text-5xl md:text-7xl font-black tracking-tighter leading-none">
                   {formatResult(result)}
                 </h3>
-                <span className="text-2xl font-bold text-indigo-300/40 uppercase tracking-tighter">
+                <span className="text-2xl font-bold text-slate-600 uppercase">
                   {toCurrency === 'VES' ? 'Bs' : toCurrency.split('_')[0]}
                 </span>
               </div>
 
-              <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-400 font-bold flex items-center">
-                    <i className="fas fa-calculator mr-2 text-indigo-500"></i>
-                    Conversión Directa
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-medium">
+              <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+                <div className="text-left w-full">
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Tasa aplicada</p>
+                  <p className="text-sm font-bold text-slate-300">
                     1 {fromCurrency.split('_')[0]} = {formatResult(getRate(fromCurrency) / getRate(toCurrency))} {toCurrency.split('_')[0]}
                   </p>
                 </div>
@@ -196,14 +180,10 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
                   onClick={() => {
                     const text = `DolarVZLA: ${amount} ${fromCurrency.split('_')[0]} = ${formatResult(result)} ${toCurrency.split('_')[0]}. Diferencia: ${comparison?.diff.toFixed(2)}% ${comparison?.label}`;
                     navigator.clipboard.writeText(text);
-                    const btn = document.getElementById('copy-btn');
-                    if(btn) btn.innerHTML = '<i class="fas fa-check"></i> ¡Copiado!';
-                    setTimeout(() => { if(btn) btn.innerHTML = '<i class="fas fa-share-alt"></i> Compartir'; }, 2000);
                   }}
-                  id="copy-btn"
-                  className="w-full md:w-auto bg-white/5 hover:bg-white/10 active:scale-95 transition-all px-6 py-3 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 border border-white/5"
+                  className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-500 px-8 py-4 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2"
                 >
-                  <i className="fas fa-share-alt text-indigo-400"></i> Compartir
+                  <i className="fas fa-copy"></i> Copiar
                 </button>
               </div>
             </div>
