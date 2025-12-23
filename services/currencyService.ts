@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MarketData } from "../types";
 
 /**
- * Fuente 1: DolarVzla
+ * Fuente 1: DolarVzla (API tradicional)
  */
 const fetchDolarVzla = async () => {
   try {
@@ -58,12 +58,12 @@ const fetchDolarApiBackup = async () => {
 };
 
 /**
- * Fuente 3: Google Search via Gemini (Definitiva si hay CORS)
+ * Fuente 3: Google Search via Gemini (Definitiva si hay CORS o fallos de API)
  */
 const fetchRatesViaAI = async () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    console.error("API_KEY no configurada para búsqueda IA");
+    console.error("API_KEY no detectada en process.env. Asegúrate de configurarla en tu panel de control.");
     return null;
   }
 
@@ -72,16 +72,16 @@ const fetchRatesViaAI = async () => {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: "Busca en la web la tasa oficial del BCV (Banco Central de Venezuela) para el dólar y el euro vigente para HOY. Solo responde con el JSON solicitado.",
+      contents: "Busca en la web la tasa oficial vigente del Banco Central de Venezuela (BCV) para el dólar y el euro de hoy. Responde estrictamente con el JSON solicitado.",
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            usd: { type: Type.NUMBER },
-            eur: { type: Type.NUMBER },
-            fecha: { type: Type.STRING }
+            usd: { type: Type.NUMBER, description: "Tasa del dólar en Bs" },
+            eur: { type: Type.NUMBER, description: "Tasa del euro en Bs" },
+            fecha: { type: Type.STRING, description: "Fecha de la tasa" }
           },
           required: ["usd", "eur"]
         }
@@ -90,7 +90,7 @@ const fetchRatesViaAI = async () => {
     
     const data = JSON.parse(response.text || "{}");
     if (data.usd && data.eur) {
-      return { ...data, source: "Google Search (Dato Real)" };
+      return { ...data, source: "Google Search (Dato Directo BCV)" };
     }
     return null;
   } catch (e) {
@@ -104,16 +104,14 @@ const fetchRatesViaAI = async () => {
  */
 const fetchUsdtFromYadio = async (): Promise<number | null> => {
   try {
-    // Yadio /rate/USD/VES a veces devuelve la tasa inversa dependiendo del nodo.
-    // Usamos USD/VES como base estable para el cálculo de USDT P2P.
+    // Intentamos obtener la tasa USD/VES de Yadio
     const response = await fetch("https://api.yadio.io/rate/USD/VES");
     if (!response.ok) return null;
     const json = await response.json();
     
     if (json.rate) {
       let rate = parseFloat(json.rate);
-      // Si la tasa es menor a 1 (ej: 0.018), significa que la API devolvió "USD por 1 VES".
-      // Para el usuario venezolano necesitamos "VES por 1 USD" (ej: 55.40).
+      // Si el rate es muy bajo (ej. 0.018), es "USD por 1 VES". Invertimos para obtener "VES por 1 USD".
       if (rate > 0 && rate < 1) {
         rate = 1 / rate;
       }
@@ -131,51 +129,55 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
     usd_bcv: { price: 0, label: "Dólar BCV", symbol: "$", icon: "fa-building-columns", color: "blue" },
     eur_bcv: { price: 0, label: "Euro BCV", symbol: "€", icon: "fa-euro-sign", color: "indigo" },
     usdt: { price: 0, label: "USDT Binance", symbol: "₮", icon: "fa-circle-dollar-to-slot", color: "emerald" },
-    lastUpdate: "Sin conexión",
+    lastUpdate: "Sin datos",
     sources: []
   };
 
   try {
-    // 1. Intentar APIs tradicionales
+    // 1. Intentar APIs tradicionales primero (Rápidas)
     let bcvData = await fetchDolarVzla();
     if (!bcvData) bcvData = await fetchDolarApiBackup();
 
-    // 2. Si fallan (por CORS o caída), usar IA con Google Search
+    // 2. Si las APIs fallan (CORS o Caídas), usar IA con Google Search (Más robusto)
     if (!bcvData) {
       bcvData = await fetchRatesViaAI();
     }
 
-    const yadioPrice = await fetchUsdtFromYadio();
+    const usdtPrice = await fetchUsdtFromYadio();
 
     return {
       usd_bcv: { ...fallback.usd_bcv, price: bcvData?.usd || 0 },
       eur_bcv: { ...fallback.eur_bcv, price: bcvData?.eur || 0 },
-      usdt: { ...fallback.usdt, price: yadioPrice || 0 },
-      lastUpdate: bcvData ? `Fuente: ${bcvData.source}` : "Error de sincronización",
+      usdt: { ...fallback.usdt, price: usdtPrice || 0 },
+      lastUpdate: bcvData ? `Fuente: ${bcvData.source}` : "Error de sincronización (BCV Inaccesible)",
       sources: [
         { title: bcvData?.source || "BCV Oficial", uri: "https://www.bcv.org.ve" },
-        { title: "Yadio", uri: "https://yadio.io" }
+        { title: "Yadio API", uri: "https://yadio.io" }
       ]
     };
   } catch (error) {
+    console.error("Error en servicio de divisas:", error);
     return fallback;
   }
 };
 
 export const askAssistant = async (query: string, data: MarketData): Promise<string> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) return "⚠️ API Key no configurada.";
+  if (!apiKey) return "⚠️ Error: La API Key no está configurada en el entorno. Asegúrate de que el nombre sea 'API_KEY'.";
+  
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: query,
       config: {
-        systemInstruction: `Asistente financiero experto. Tasas actuales: USD: ${data.usd_bcv.price}, EUR: ${data.eur_bcv.price}, USDT: ${data.usdt.price}. Si las tasas son 0, explica que el BCV está inaccesible.`
+        systemInstruction: `Eres un experto financiero en el mercado venezolano. Datos actuales: Dólar BCV: ${data.usd_bcv.price}, Euro BCV: ${data.eur_bcv.price}, USDT Binance: ${data.usdt.price}. Responde de forma clara y útil para el usuario.`
       }
     });
-    return response.text || "No hay respuesta.";
-  } catch (e) {
-    return "Error de IA.";
+    return response.text || "No pude generar una respuesta en este momento.";
+  } catch (e: any) {
+    console.error("Error IA:", e);
+    if (e.message?.includes("API_KEY_INVALID")) return "⚠️ La API Key configurada no es válida.";
+    return "Ocurrió un error al procesar tu consulta con la IA.";
   }
 };
