@@ -20,22 +20,10 @@
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        .custom-scroll::-webkit-scrollbar {
-            height: 4px;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
-            background: #e2e8f0;
-            border-radius: 10px;
-        }
     </style>
     <script>
-      // Polyfill esencial para evitar pantalla en blanco por 'process is not defined'
-      window.process = window.process || { env: {} };
+      // Polyfill esencial para evitar error 'process is not defined' que causa pantalla en blanco
+      window.process = { env: { API_KEY: "" } };
     </script>
 <script type="importmap">
 {
