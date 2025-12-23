@@ -46,17 +46,17 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
       const activeDivisa = fromCurrency === 'VES' ? toCurrency : fromCurrency;
       
       if (activeDivisa === 'USD_BCV') {
-        // Comparación clásica de brecha BCV vs Paralelo
+        // Comparación clásica de brecha BCV vs Binance
         diff = ((data.usd_bcv.price - data.usdt.price) / data.usdt.price) * 100;
-        label = "Brecha vs Paralelo";
+        label = "Brecha vs USDT";
       } else if (activeDivisa === 'USDT') {
-        // Comparación inversa: Paralelo vs BCV
+        // Comparación inversa: Binance vs BCV
         diff = ((data.usdt.price - data.usd_bcv.price) / data.usd_bcv.price) * 100;
-        label = "Brecha vs Oficial";
+        label = "Brecha vs BCV";
       } else if (activeDivisa === 'EUR_BCV') {
         // Euro comparado con el Dólar BCV
         diff = ((data.eur_bcv.price - data.usd_bcv.price) / data.usd_bcv.price) * 100;
-        label = "vs Dólar Oficial";
+        label = "vs Dólar BCV";
       }
     }
 
@@ -118,9 +118,9 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
               className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 px-5 font-bold text-slate-700 appearance-none focus:ring-4 focus:ring-indigo-500/10 outline-none cursor-pointer transition-all"
             >
               <option value="VES">🇻🇪 VES (Bolívares)</option>
-              <option value="USD_BCV">🇺🇸 USD (Dólar)</option>
-              <option value="EUR_BCV">🇪🇺 EUR (Euro)</option>
-              <option value="USDT">🪙 USDT (Paralelo)</option>
+              <option value="USD_BCV">🇺🇸 USD (Dólar BCV)</option>
+              <option value="EUR_BCV">🇪🇺 EUR (Euro BCV)</option>
+              <option value="USDT">🪙 USDT (Binance)</option>
             </select>
             <i className="fas fa-chevron-down absolute right-5 bottom-6 text-slate-300 pointer-events-none text-[10px]"></i>
           </div>
@@ -140,9 +140,9 @@ const Calculator: React.FC<CalculatorProps> = ({ data }) => {
               className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4.5 px-5 font-bold text-slate-700 appearance-none focus:ring-4 focus:ring-indigo-500/10 outline-none cursor-pointer transition-all"
             >
               <option value="VES">🇻🇪 VES (Bolívares)</option>
-              <option value="USD_BCV">🇺🇸 USD (Dólar)</option>
-              <option value="EUR_BCV">🇪🇺 EUR (Euro)</option>
-              <option value="USDT">🪙 USDT (Paralelo)</option>
+              <option value="USD_BCV">🇺🇸 USD (Dólar BCV)</option>
+              <option value="EUR_BCV">🇪🇺 EUR (Euro BCV)</option>
+              <option value="USDT">🪙 USDT (Binance)</option>
             </select>
             <i className="fas fa-chevron-down absolute right-5 bottom-6 text-slate-300 pointer-events-none text-[10px]"></i>
           </div>

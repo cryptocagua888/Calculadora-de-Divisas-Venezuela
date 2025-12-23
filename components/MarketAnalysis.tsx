@@ -13,7 +13,7 @@ const MarketAnalysis: React.FC<MarketAnalysisProps> = ({ data }) => {
   const chartData = [
     { name: 'USD BCV', value: data.usd_bcv.price, color: '#4f46e5' },
     { name: 'Euro BCV', value: data.eur_bcv.price, color: '#7c3aed' },
-    { name: 'USDT Yadio', value: data.usdt.price, color: '#10b981' },
+    { name: 'USDT Binance', value: data.usdt.price, color: '#10b981' },
   ];
 
   return (
@@ -26,7 +26,7 @@ const MarketAnalysis: React.FC<MarketAnalysisProps> = ({ data }) => {
         <div className="flex items-center justify-between p-6 bg-slate-900 rounded-3xl mb-6 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
           <div className="relative z-10">
-            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] mb-2">Spread BCV vs Paralelo</p>
+            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] mb-2">Spread BCV vs USDT (Yadio API)</p>
             <p className="text-4xl font-black text-white">+{usdVsUsdtDiff.toFixed(2)}%</p>
           </div>
           <div className="text-indigo-400/20 text-5xl relative z-10">
@@ -34,7 +34,7 @@ const MarketAnalysis: React.FC<MarketAnalysisProps> = ({ data }) => {
           </div>
         </div>
         <p className="text-sm text-slate-500 leading-relaxed font-medium">
-          Muestra la brecha entre la tasa oficial del BCV y el mercado digital de USDT. Una brecha mayor a 5% suele indicar inestabilidad o alta demanda de divisas.
+          Este porcentaje muestra la brecha entre la tasa oficial del <b>BCV</b> y el valor del <b>USDT Binance</b> obtenido directamente desde la API de <b>Yadio</b>. Una brecha mayor al 10% suele indicar alta volatilidad.
         </p>
       </div>
 

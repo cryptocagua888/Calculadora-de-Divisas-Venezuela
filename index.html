@@ -33,6 +33,10 @@
             border-radius: 10px;
         }
     </style>
+    <script>
+      // Polyfill esencial para evitar pantalla en blanco por 'process is not defined'
+      window.process = window.process || { env: {} };
+    </script>
 <script type="importmap">
 {
   "imports": {
