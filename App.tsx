@@ -10,18 +10,29 @@ import AIAssistant from './components/AIAssistant';
 const App: React.FC = () => {
   const [data, setData] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [missingKey, setMissingKey] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
+    
     const apiKey = (window as any).process?.env?.API_KEY;
-    if (!apiKey) setMissingKey(true);
+    if (!apiKey) {
+      setMissingKey(true);
+      console.warn("API_KEY no detectada. Funcionando en modo limitado.");
+    }
     
     try {
       const result = await fetchLatestRates();
-      setData(result);
+      if (result) {
+        setData(result);
+      } else {
+        throw new Error("No se recibieron datos del servicio");
+      }
     } catch (err) {
-      console.error("App render error:", err);
+      console.error("App load error:", err);
+      setError("No se pudo conectar con los servidores de cotización.");
     } finally {
       setLoading(false);
     }
@@ -40,44 +51,53 @@ const App: React.FC = () => {
               Dolar<span className="text-indigo-600 italic">VZLA</span>
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Fuentes: BCV & Yadio</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cálculo Oficial y USDT</span>
             </div>
           </div>
           
-          {data && (
-            <div className="bg-white px-5 py-2.5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</p>
-                <p className="text-[10px] font-black text-slate-700">{data.lastUpdate}</p>
-              </div>
-              <button onClick={loadData} className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center hover:bg-indigo-600 transition-colors">
-                <i className={`fas fa-sync-alt text-[10px] ${loading ? 'animate-spin' : ''}`}></i>
-              </button>
+          <div className="bg-white px-5 py-2.5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Actualización</p>
+              <p className="text-[10px] font-black text-slate-700">{data ? data.lastUpdate : 'Cargando...'}</p>
             </div>
-          )}
+            <button 
+              onClick={loadData} 
+              disabled={loading}
+              className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:bg-indigo-600 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <i className={`fas fa-sync-alt text-xs ${loading ? 'animate-spin' : ''}`}></i>
+            </button>
+          </div>
         </header>
 
         {missingKey && (
-          <div className="mb-10 p-6 bg-amber-50 border border-amber-200 rounded-3xl flex flex-col md:flex-row items-center gap-6 animate-in fade-in slide-in-from-top-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
-              <i className="fas fa-key text-xl"></i>
+          <div className="mb-8 p-5 bg-amber-50 border border-amber-200 rounded-3xl flex items-center gap-4">
+            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
+              <i className="fas fa-exclamation-triangle"></i>
             </div>
-            <div className="flex-1 text-center md:text-left">
-              <h3 className="text-amber-900 font-black text-sm uppercase tracking-tight">Configuración Necesaria</h3>
-              <p className="text-amber-700 text-xs font-bold leading-relaxed mt-1">
-                Para activar la IA con fuentes BCV/Yadio en tiempo real, agrega la API_KEY en Vercel.
-              </p>
+            <p className="text-amber-800 text-xs font-bold leading-snug">
+              Modo Invitado: La IA y las tasas en tiempo real requieren una API_KEY configurada.
+            </p>
+          </div>
+        )}
+
+        {error && !data && (
+          <div className="py-20 text-center">
+            <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <i className="fas fa-plug-circle-xmark text-3xl"></i>
             </div>
-            <a href="https://vercel.com" target="_blank" className="bg-amber-600 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-colors">
-              Ir a Vercel
-            </a>
+            <h2 className="text-xl font-black text-slate-800 mb-2">Error de Conexión</h2>
+            <p className="text-slate-500 text-sm font-medium mb-8">{error}</p>
+            <button onClick={loadData} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-200">
+              Reintentar Conexión
+            </button>
           </div>
         )}
 
         {loading && !data ? (
           <div className="flex flex-col items-center justify-center py-40">
              <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-             <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Consultando BCV y Yadio...</p>
+             <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Sincronizando con BCV y Yadio...</p>
           </div>
         ) : data ? (
           <>
@@ -94,8 +114,8 @@ const App: React.FC = () => {
           </>
         ) : null}
 
-        <footer className="mt-20 pt-10 border-t border-slate-100 text-center opacity-30">
-          <p className="text-[9px] font-black uppercase tracking-[0.4em]">Datos Oficiales y de Criptoactivos</p>
+        <footer className="mt-20 pt-10 border-t border-slate-100 text-center">
+          <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">Hecho para Venezuela • Datos de BCV y Yadio</p>
         </footer>
       </div>
     </div>

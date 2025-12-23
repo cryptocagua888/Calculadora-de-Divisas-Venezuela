@@ -11,27 +11,26 @@ const getApiKey = () => {
 };
 
 /**
- * Obtiene el precio de USDT/USD directamente desde la API de Yadio.
- * Si la API devuelve la tasa invertida (VES por 1 USD), la ajustamos.
+ * Obtiene el precio de USDT/USD desde la API de Yadio.
+ * Maneja la inversión de la tasa para asegurar que siempre devuelva Bs por 1 USD.
  */
 const fetchUsdtFromYadio = async (): Promise<number | null> => {
   try {
+    // Usamos el endpoint USD/VES solicitado por el usuario
     const response = await fetch("https://api.yadio.io/rate/USD/VES");
     if (!response.ok) throw new Error("Yadio API error");
     const json = await response.json();
     
-    if (json && typeof json.rate === 'number') {
-      // Si la tasa es muy baja (ej. 0.02), es 1 VES en USD. Invertimos para obtener 1 USD en VES.
-      // Si la tasa es alta (ej. 45.0), ya es USD en VES.
-      if (json.rate < 1) {
-        return 1 / json.rate;
+    // Yadio puede devolver el valor en 'rate' o 'result'
+    const rawRate = json.rate || json.result || (json.request && json.request.amount);
+    if (rawRate) {
+      const num = parseFloat(rawRate);
+      // Si el usuario dice que está invertida (1 VES a USD = ~0.02), 
+      // la invertimos para obtener USD a VES (~45.0)
+      if (num > 0 && num < 1) {
+        return 1 / num;
       }
-      // El usuario indica que la tasa aparece invertida, así que aplicamos la inversión solicitada
-      // para asegurar que se muestre el valor de 1 USDT en Bolívares.
-      // Si el valor actual es 45 y el usuario dice que está mal, probamos la lógica de inversión.
-      // Sin embargo, usualmente en Yadio /USD/VES devuelve la tasa directa. 
-      // Si el usuario reporta que está de "1 VES a USDT", significa que el valor es pequeño.
-      return json.rate;
+      return num;
     }
     return null;
   } catch (error) {
@@ -42,17 +41,21 @@ const fetchUsdtFromYadio = async (): Promise<number | null> => {
 
 export const fetchLatestRates = async (): Promise<MarketData> => {
   const fallback: MarketData = {
-    usd_bcv: { price: 36.85, label: "Dólar BCV", symbol: "$", icon: "fa-building-columns", color: "blue" },
-    eur_bcv: { price: 40.12, label: "Euro BCV", symbol: "€", icon: "fa-euro-sign", color: "indigo" },
-    usdt: { price: 39.50, label: "USDT Binance", symbol: "₮", icon: "fa-circle-dollar-to-slot", color: "emerald" },
-    lastUpdate: "Datos de Referencia",
-    sources: [{ title: "BCV Oficial", uri: "https://www.bcv.org.ve" }, { title: "Yadio API", uri: "https://yadio.io" }]
+    usd_bcv: { price: 45.45, label: "Dólar BCV", symbol: "$", icon: "fa-building-columns", color: "blue" },
+    eur_bcv: { price: 49.12, label: "Euro BCV", symbol: "€", icon: "fa-euro-sign", color: "indigo" },
+    usdt: { price: 46.80, label: "USDT Binance", symbol: "₮", icon: "fa-circle-dollar-to-slot", color: "emerald" },
+    lastUpdate: "Datos Estimados (BCV)",
+    sources: [
+      { title: "BCV Oficial", uri: "https://www.bcv.org.ve" },
+      { title: "Yadio API", uri: "https://yadio.io" }
+    ]
   };
 
   try {
+    // 1. Obtener USDT primero (Fuente directa)
     const yadioPrice = await fetchUsdtFromYadio();
-    const apiKey = getApiKey();
     
+    const apiKey = getApiKey();
     if (!apiKey) {
       if (yadioPrice) fallback.usdt.price = yadioPrice;
       return fallback;
@@ -60,6 +63,7 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
 
     const ai = new GoogleGenAI({ apiKey });
     
+    // 2. Obtener tasas BCV con Gemini
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: "Consulta hoy las tasas oficiales del Banco Central de Venezuela para el Dólar (USD) y el Euro (EUR).",
@@ -78,17 +82,15 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
       },
     });
 
-    // Limpieza robusta del JSON para evitar "Unexpected non-whitespace character"
+    // Extracción ultra-segura del JSON para evitar errores de parseo
     const rawText = response.text || "";
-    const jsonStart = rawText.indexOf('{');
-    const jsonEnd = rawText.lastIndexOf('}');
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     
-    if (jsonStart === -1 || jsonEnd === -1) {
-       throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA");
+    if (!jsonMatch) {
+       throw new Error("No JSON found in response");
     }
     
-    const cleanJson = rawText.substring(jsonStart, jsonEnd + 1);
-    const json = JSON.parse(cleanJson);
+    const json = JSON.parse(jsonMatch[0]);
     
     const usd_bcv_price = Number(json.usd_bcv) || fallback.usd_bcv.price;
     const eur_bcv_price = Number(json.eur_bcv) || fallback.eur_bcv.price;
@@ -100,13 +102,15 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
       usdt: { price: usdt_price, label: "USDT Binance", symbol: "₮", icon: "fa-circle-dollar-to-slot", color: "emerald" },
       lastUpdate: json.last_update || new Date().toLocaleTimeString(),
       sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-        title: chunk.web?.title || "Fuente",
-        uri: chunk.web?.uri || "#"
+        title: chunk.web?.title || "Fuente BCV",
+        uri: chunk.web?.uri || "https://www.bcv.org.ve"
       })) || fallback.sources
     };
   } catch (error) {
-    console.error("Error en fetchLatestRates:", error);
-    // En caso de error crítico de parseo o API, intentamos devolver lo mejor disponible
+    console.warn("Usando fallback por error en API:", error);
+    // Intentamos al menos actualizar USDT si la API de Yadio funcionó antes de fallar Gemini
+    const yadioPrice = await fetchUsdtFromYadio();
+    if (yadioPrice) fallback.usdt.price = yadioPrice;
     return fallback;
   }
 };
@@ -114,25 +118,27 @@ export const fetchLatestRates = async (): Promise<MarketData> => {
 export const askAssistant = async (question: string, data: MarketData): Promise<string> => {
   try {
     const apiKey = getApiKey();
-    if (!apiKey) return "⚠️ Error: API_KEY no configurada.";
+    if (!apiKey) return "⚠️ Error: API_KEY no configurada en el entorno.";
 
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: question,
       config: {
-        systemInstruction: `Eres un experto financiero venezolano. 
+        systemInstruction: `Eres un asistente financiero experto en Venezuela. 
         DATOS ACTUALES:
         - Dólar BCV: ${data.usd_bcv.price} Bs.
         - Euro BCV: ${data.eur_bcv.price} Bs.
         - USDT Binance: ${data.usdt.price} Bs.
         
-        No menciones la palabra "paralelo". Responde de forma útil, breve y clara.`
+        No menciones nunca "dólar paralelo". Usa "mercado digital" o "tasa USDT".
+        Responde de forma concisa, educada y profesional.`
       }
     });
 
-    return response.text || "No tengo una respuesta para eso ahora.";
+    return response.text || "No tengo una respuesta en este momento.";
   } catch (error) {
-    return "Error al procesar tu consulta con la IA.";
+    console.error("Error en asistente:", error);
+    return "Lo siento, hubo un error al procesar tu consulta.";
   }
 };
