@@ -23,7 +23,7 @@ const RateCard: React.FC<RateCardProps> = ({ rate, isLoading }) => {
           <i className={`fas ${rate.icon} text-base`}></i>
         </div>
         <div className="flex items-center gap-2">
-           <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`}></span>
+           <span className={`w-1.5 h-1.5 rounded-full ${style.dot} animate-pulse`}></span>
            <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">{rate.label}</span>
         </div>
       </div>
@@ -35,12 +35,17 @@ const RateCard: React.FC<RateCardProps> = ({ rate, isLoading }) => {
           </span>
         </div>
         <div className="flex items-center gap-2 mt-4">
-          <span className="text-[10px] font-black bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm text-slate-500 uppercase tracking-widest">
+          <span className="text-[9px] font-black bg-white px-2.5 py-1 rounded-lg border border-slate-100 shadow-sm text-slate-400 uppercase tracking-widest">
             1 {rate.symbol}
           </span>
+          {!isLoading && (
+            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-md uppercase tracking-tighter ${rate.price > 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              Oficial
+            </span>
+          )}
         </div>
       </div>
-      {/* Abstract background shape */}
+      {/* Icono de fondo decorativo */}
       <div className={`absolute -right-6 -bottom-6 text-8xl opacity-[0.03] ${style.text} rotate-12`}>
         <i className={`fas ${rate.icon}`}></i>
       </div>
