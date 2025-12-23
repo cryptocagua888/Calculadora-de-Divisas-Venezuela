@@ -1,0 +1,7 @@
+{
+  "name": "Calculadora de Divisas Venezuela",
+  "description": "Una herramienta moderna para calcular cambios entre Dólar BCV, Euro BCV y USDT, con comparativas de brecha cambiaria y cotizaciones en tiempo real.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
