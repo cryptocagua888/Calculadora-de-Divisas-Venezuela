@@ -14,17 +14,12 @@
             color: #1e293b;
             -webkit-tap-highlight-color: transparent;
         }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
     </style>
     <script>
-      // Asegurar que process.env esté disponible antes de cargar cualquier módulo
-      window.process = window.process || { env: {} };
-      window.process.env = window.process.env || {};
-      if (!window.process.env.NODE_ENV) window.process.env.NODE_ENV = 'production';
+      // Asegurar que process.env sea accesible sin sobreescribir lo inyectado
+      if (typeof window.process === 'undefined') {
+        window.process = { env: {} };
+      }
     </script>
     <script type="importmap">
 {
